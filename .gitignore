@@ -1,0 +1,10 @@
+__pycache__/
+*.pyc
+*.pyo
+.env
+udon.db
+uploads/
+node_modules/
+package.json
+package-lock.json
+*.db-journal

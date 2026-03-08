@@ -1,0 +1,283 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="香川県のうどん屋レビューを共有できるWebアプリ。うどんに特化した評価で最高の一杯を見つけよう。">
+  <title>🍜 讃岐うどんレビュー | 香川のうどん評価サイト</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@300;400;500;700;900&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+
+  <!-- Navigation -->
+  <nav id="main-nav">
+    <div class="nav-inner">
+      <a href="#" class="nav-logo" data-page="overview">🍜 讃岐うどんレビュー</a>
+      <div class="nav-links">
+        <a href="#" data-page="overview" class="nav-link active" id="nav-overview">オーバービュー</a>
+        <a href="#" data-page="shops" class="nav-link" id="nav-shops">お店一覧</a>
+        <a href="#" data-page="review" class="nav-link highlight" id="nav-review">レビュー投稿</a>
+        <a href="#" data-page="users" class="nav-link" id="nav-users">ユーザー統計</a>
+      </div>
+      <button class="nav-hamburger" id="nav-hamburger" aria-label="メニュー">
+        <span></span><span></span><span></span>
+      </button>
+    </div>
+  </nav>
+
+  <!-- Mobile Menu -->
+  <div class="mobile-menu" id="mobile-menu">
+    <a href="#" data-page="overview" class="mobile-link">🏠 オーバービュー</a>
+    <a href="#" data-page="shops" class="mobile-link">🏪 お店一覧</a>
+    <a href="#" data-page="review" class="mobile-link">✍️ レビュー投稿</a>
+    <a href="#" data-page="users" class="mobile-link">👤 ユーザー統計</a>
+  </div>
+
+  <!-- Pages Container -->
+  <main id="app">
+
+    <!-- Overview Page -->
+    <section id="page-overview" class="page active">
+      <div class="hero">
+        <div class="hero-content">
+          <h1>讃岐うどんレビュー</h1>
+          <p class="hero-sub">香川県のうどん屋を評価・共有するプラットフォーム</p>
+          <div class="hero-stats" id="hero-stats"></div>
+        </div>
+      </div>
+      <div class="container">
+        <div class="grid-2">
+          <div class="section-card">
+            <h2>🏆 総合ランキング Top 5</h2>
+            <div id="top-shops-list" class="ranking-list"></div>
+          </div>
+          <div class="section-card">
+            <h2>🕐 最新レビュー</h2>
+            <div id="latest-reviews-list"></div>
+          </div>
+        </div>
+        <div class="grid-2" style="margin-top: 1.5rem;">
+          <div class="section-card">
+            <h2>📍 エリア別統計</h2>
+            <div id="area-stats-list"></div>
+          </div>
+          <div class="section-card">
+            <h2>🍜 うどんタイプ別統計</h2>
+            <div id="udon-type-stats-list"></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Shops Page -->
+    <section id="page-shops" class="page">
+      <div class="container">
+        <div class="page-header">
+          <h1>🏪 お店一覧</h1>
+          <div class="search-bar">
+            <input type="text" id="shop-search" placeholder="店名で検索..." class="input">
+            <select id="shop-area-filter" class="input select">
+              <option value="">全エリア</option>
+            </select>
+          </div>
+        </div>
+        <div id="shops-grid" class="shops-grid"></div>
+      </div>
+    </section>
+
+    <!-- Shop Detail Page -->
+    <section id="page-shop-detail" class="page">
+      <div class="container">
+        <button class="btn-back" id="btn-back-shops">← お店一覧に戻る</button>
+        <div id="shop-detail-content"></div>
+      </div>
+    </section>
+
+    <!-- Review Page -->
+    <section id="page-review" class="page">
+      <div class="container narrow">
+        <div class="page-header">
+          <h1>✍️ レビュー投稿</h1>
+          <p>あなたのうどん体験を共有しましょう</p>
+        </div>
+        <form id="review-form" class="review-form glass-card">
+          <!-- Shop Selection -->
+          <div class="form-group">
+            <label>お店を選択</label>
+            <div class="shop-select-wrapper">
+              <select id="review-shop" class="input select" required>
+                <option value="">-- お店を選択 --</option>
+              </select>
+              <button type="button" id="btn-add-shop" class="btn btn-sm">+ 新規追加</button>
+            </div>
+          </div>
+
+          <!-- New Shop Form (hidden by default) -->
+          <div id="new-shop-form" class="new-shop-form hidden">
+            <div class="form-row">
+              <div class="form-group">
+                <label>店名</label>
+                <input type="text" id="new-shop-name" class="input" placeholder="例: 山越うどん">
+              </div>
+              <div class="form-group">
+                <label>エリア</label>
+                <select id="new-shop-area" class="input select">
+                  <option value="">選択...</option>
+                  <option value="高松">高松</option>
+                  <option value="丸亀">丸亀</option>
+                  <option value="坂出">坂出</option>
+                  <option value="善通寺">善通寺</option>
+                  <option value="観音寺">観音寺</option>
+                  <option value="さぬき">さぬき</option>
+                  <option value="三豊">三豊</option>
+                  <option value="綾川">綾川</option>
+                  <option value="琴平">琴平</option>
+                  <option value="まんのう">まんのう</option>
+                  <option value="その他">その他</option>
+                </select>
+              </div>
+            </div>
+            <button type="button" id="btn-save-shop" class="btn btn-primary btn-sm">登録</button>
+          </div>
+
+          <!-- Udon Type -->
+          <div class="form-group">
+            <label>うどんの種類</label>
+            <div class="udon-type-grid" id="udon-type-grid">
+              <label class="udon-chip"><input type="radio" name="udon_type" value="かけ"><span>かけ</span></label>
+              <label class="udon-chip"><input type="radio" name="udon_type" value="ぶっかけ"><span>ぶっかけ</span></label>
+              <label class="udon-chip"><input type="radio" name="udon_type" value="釜揚げ"><span>釜揚げ</span></label>
+              <label class="udon-chip"><input type="radio" name="udon_type" value="しょうゆ"><span>しょうゆ</span></label>
+              <label class="udon-chip"><input type="radio" name="udon_type" value="釜玉"><span>釜玉</span></label>
+              <label class="udon-chip"><input type="radio" name="udon_type" value="ざる"><span>ざる</span></label>
+              <label class="udon-chip"><input type="radio" name="udon_type" value="カレー"><span>カレー</span></label>
+              <label class="udon-chip"><input type="radio" name="udon_type" value="肉"><span>肉</span></label>
+              <label class="udon-chip"><input type="radio" name="udon_type" value="その他" checked><span>その他</span></label>
+            </div>
+          </div>
+
+          <!-- Scores -->
+          <div class="form-group">
+            <label>評価 <span class="score-hint">🍜をクリックして評価</span></label>
+            <div class="score-inputs">
+              <div class="score-row" data-field="noodle_score">
+                <span class="score-label">🍝 麺<small>コシ・食感</small></span>
+                <div class="score-bowls">
+                  <button type="button" class="bowl" data-value="1">🍜</button>
+                  <button type="button" class="bowl" data-value="2">🍜</button>
+                  <button type="button" class="bowl" data-value="3">🍜</button>
+                  <button type="button" class="bowl" data-value="4">🍜</button>
+                  <button type="button" class="bowl" data-value="5">🍜</button>
+                </div>
+                <span class="score-value">3</span>
+              </div>
+              <div class="score-row" data-field="broth_score">
+                <span class="score-label">🫕 出汁<small>香り・深み</small></span>
+                <div class="score-bowls">
+                  <button type="button" class="bowl" data-value="1">🍜</button>
+                  <button type="button" class="bowl" data-value="2">🍜</button>
+                  <button type="button" class="bowl" data-value="3">🍜</button>
+                  <button type="button" class="bowl" data-value="4">🍜</button>
+                  <button type="button" class="bowl" data-value="5">🍜</button>
+                </div>
+                <span class="score-value">3</span>
+              </div>
+              <div class="score-row" data-field="topping_score">
+                <span class="score-label">🍤 トッピング<small>天ぷら・薬味</small></span>
+                <div class="score-bowls">
+                  <button type="button" class="bowl" data-value="1">🍜</button>
+                  <button type="button" class="bowl" data-value="2">🍜</button>
+                  <button type="button" class="bowl" data-value="3">🍜</button>
+                  <button type="button" class="bowl" data-value="4">🍜</button>
+                  <button type="button" class="bowl" data-value="5">🍜</button>
+                </div>
+                <span class="score-value">3</span>
+              </div>
+              <div class="score-row" data-field="value_score">
+                <span class="score-label">💰 コスパ<small>値段の満足度</small></span>
+                <div class="score-bowls">
+                  <button type="button" class="bowl" data-value="1">🍜</button>
+                  <button type="button" class="bowl" data-value="2">🍜</button>
+                  <button type="button" class="bowl" data-value="3">🍜</button>
+                  <button type="button" class="bowl" data-value="4">🍜</button>
+                  <button type="button" class="bowl" data-value="5">🍜</button>
+                </div>
+                <span class="score-value">3</span>
+              </div>
+              <div class="score-row" data-field="atmosphere_score">
+                <span class="score-label">🏠 雰囲気<small>佇まい・サービス</small></span>
+                <div class="score-bowls">
+                  <button type="button" class="bowl" data-value="1">🍜</button>
+                  <button type="button" class="bowl" data-value="2">🍜</button>
+                  <button type="button" class="bowl" data-value="3">🍜</button>
+                  <button type="button" class="bowl" data-value="4">🍜</button>
+                  <button type="button" class="bowl" data-value="5">🍜</button>
+                </div>
+                <span class="score-value">3</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Image Upload -->
+          <div class="form-group">
+            <label>📷 うどん写真（最大3枚）</label>
+            <div class="image-upload-area" id="image-upload-area">
+              <input type="file" id="image-input" accept="image/*" multiple style="display:none">
+              <button type="button" class="btn-upload" id="btn-upload">
+                <span class="upload-icon">📷</span>
+                <span>写真を選択</span>
+              </button>
+              <div class="image-previews" id="image-previews"></div>
+            </div>
+          </div>
+
+          <!-- Username & Comment -->
+          <div class="form-group">
+            <label>ユーザー名</label>
+            <input type="text" id="review-username" class="input" placeholder="例: うどん太郎" required>
+          </div>
+          <div class="form-group">
+            <label>コメント</label>
+            <textarea id="review-comment" class="input textarea" placeholder="うどんの感想を自由に..." rows="3"></textarea>
+          </div>
+
+          <button type="submit" class="btn btn-primary btn-lg" id="btn-submit-review">🍜 レビューを投稿する</button>
+        </form>
+      </div>
+    </section>
+
+    <!-- Users Page -->
+    <section id="page-users" class="page">
+      <div class="container">
+        <div class="page-header">
+          <h1>👤 ユーザー統計</h1>
+          <div class="search-bar">
+            <input type="text" id="user-search" placeholder="ユーザー名で検索..." class="input">
+          </div>
+        </div>
+        <div id="users-list" class="users-list"></div>
+        <div id="user-detail-content" class="hidden"></div>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- Toast -->
+  <div id="toast" class="toast"></div>
+
+  <!-- Image Modal -->
+  <div id="image-modal" class="image-modal">
+    <button class="modal-close" id="modal-close">&times;</button>
+    <img id="modal-image" src="" alt="">
+  </div>
+
+  <footer>
+    <p>🍜 讃岐うどんレビュー &copy; 2026 — 香川のうどんを愛する全ての人へ</p>
+  </footer>
+
+  <script src="/app.js"></script>
+</body>
+</html>
