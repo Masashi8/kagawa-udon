@@ -121,7 +121,7 @@ async function loadOverview() {
     if (data.latestReviews.length === 0) {
       $('#latest-reviews-list').innerHTML = '<div class="empty-state"><span class="empty-icon">✍️</span>まだレビューがありません</div>';
     } else {
-      $('#latest-reviews-list').innerHTML = data.latestReviews.map(r => reviewCardHtml(r)).join('');
+      $('#latest-reviews-list').innerHTML = data.latestReviews.map(r => reviewCardHtml(r, true, 'overview')).join('');
     }
 
     // Area stats
@@ -282,7 +282,7 @@ async function showShopDetail(id) {
       <div class="section-card" style="margin-top:1.5rem">
         <h2>📝 レビュー一覧 (${reviews.length}件)</h2>
         ${reviews.length === 0 ? '<div class="empty-state">まだレビューがありません</div>' :
-          reviews.map(r => reviewCardHtml(r, false)).join('')}
+          reviews.map(r => reviewCardHtml(r, false, 'shop')).join('')}
       </div>
     `;
 
@@ -400,9 +400,11 @@ function drawRadar(values, labels) {
 }
 
 // ─── Review Card HTML ──────────────────────────────────
-function reviewCardHtml(r, showShop = true) {
+function reviewCardHtml(r, showShop = true, context = 'default') {
   const avg = ((r.noodle_score + r.broth_score + r.topping_score + r.value_score + r.atmosphere_score) / 5).toFixed(1);
   const images = Array.isArray(r.image_urls) ? r.image_urls : [];
+  const sectionId = `comments-section-${context}-${r.id}`;
+  const listId = `comments-list-${context}-${r.id}`;
 
   return `
     <div class="review-card">
@@ -431,8 +433,113 @@ function reviewCardHtml(r, showShop = true) {
           ${images.map(url => `<img src="${escAttr(url)}" class="review-img" onclick="openImageModal('${escAttr(url)}')" alt="うどん写真">`).join('')}
         </div>
       ` : ''}
+      <div class="review-actions">
+        <button class="btn-action like-btn" onclick="likeReview(${r.id}, this)">
+          ❤️ <span class="like-count">${r.likes_count || 0}</span>
+        </button>
+        <button class="btn-action comment-toggle-btn" onclick="toggleComments(${r.id}, '${sectionId}', '${listId}')">
+          💬 <span class="comment-count">${r.comments_count || 0}</span>
+        </button>
+      </div>
+      <div id="${sectionId}" class="comments-section hidden">
+        <div class="comments-list" id="${listId}">
+          <div class="loading-sm"><div class="spinner"></div></div>
+        </div>
+        <form class="comment-form" onsubmit="submitComment(event, ${r.id}, '${listId}')">
+          <input type="text" class="input input-sm comment-username" placeholder="名前(省略可)" style="max-width: 120px;">
+          <input type="text" class="input input-sm comment-text" placeholder="コメントを書く..." required style="flex:1;">
+          <button type="submit" class="btn btn-primary btn-sm">送信</button>
+        </form>
+      </div>
     </div>
   `;
+}
+
+// ─── Review Interactions (Likes & Comments) ──────────────────
+async function likeReview(id, btnEl) {
+  try {
+    const data = await api(`/api/reviews/${id}/like`, { method: 'POST' });
+    const countEl = btnEl.querySelector('.like-count');
+    if (countEl) countEl.textContent = data.likes_count;
+    btnEl.classList.add('liked');
+    // ちょっとしたアニメーション用クラスを追加
+    btnEl.classList.add('pop');
+    setTimeout(() => btnEl.classList.remove('pop'), 300);
+  } catch (e) { /* */ }
+}
+
+async function toggleComments(id, sectionId, listId) {
+  const section = document.getElementById(sectionId);
+  if (!section) return;
+  
+  const isHidden = section.classList.contains('hidden');
+  if (isHidden) {
+    section.classList.remove('hidden');
+    loadComments(id, listId);
+  } else {
+    section.classList.add('hidden');
+  }
+}
+
+async function loadComments(id, listId) {
+  const listEl = document.getElementById(listId);
+  if (!listEl) return;
+  try {
+    const comments = await api(`/api/reviews/${id}/comments`);
+    if (comments.length === 0) {
+      listEl.innerHTML = '<div class="empty-comment">まだコメントはありません</div>';
+    } else {
+      listEl.innerHTML = comments.map(c => `
+        <div class="comment-item">
+          <span class="comment-user">${escHtml(c.username)}</span>
+          <span class="comment-body">${escHtml(c.comment)}</span>
+        </div>
+      `).join('');
+    }
+  } catch (e) {
+    listEl.innerHTML = '<div class="empty-comment error">読み込み失敗</div>';
+  }
+}
+
+async function submitComment(e, reviewId, listId) {
+  e.preventDefault();
+  const form = e.target;
+  const usernameInput = form.querySelector('.comment-username');
+  const textInput = form.querySelector('.comment-text');
+  
+  const username = usernameInput.value.trim();
+  const comment = textInput.value.trim();
+  
+  if (!comment) return;
+  
+  const btn = form.querySelector('button[type="submit"]');
+  btn.disabled = true;
+  
+  try {
+    await api(`/api/reviews/${reviewId}/comments`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username, comment })
+    });
+    
+    // Clear and reload comments
+    textInput.value = '';
+    await loadComments(reviewId, listId);
+    
+    // Increment the counter on the toggle button optimistically
+    const card = form.closest('.review-card');
+    if (card) {
+      const countEl = card.querySelector('.comment-count');
+      if (countEl) {
+        countEl.textContent = parseInt(countEl.textContent || '0') + 1;
+      }
+    }
+    showToast('コメントを投稿しました');
+  } catch (e) {
+    //
+  } finally {
+    btn.disabled = false;
+  }
 }
 
 // ─── Review Form ───────────────────────────────────────
@@ -697,7 +804,7 @@ async function showUserDetail(username) {
 
       <div class="section-card" style="margin-top:1.5rem">
         <h2>📝 レビュー履歴 (${reviews.length}件)</h2>
-        ${reviews.map(r => reviewCardHtml(r, true)).join('')}
+        ${reviews.map(r => reviewCardHtml(r, true, 'user')).join('')}
       </div>
     `;
   } catch (e) {

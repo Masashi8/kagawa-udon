@@ -48,15 +48,38 @@ def init_db():
             udon_type TEXT NOT NULL DEFAULT '',
             comment TEXT DEFAULT '',
             image_urls TEXT DEFAULT '[]',
+            likes_count INTEGER DEFAULT 0,
+            has_nigiyakashi BOOLEAN DEFAULT FALSE,
             created_at TIMESTAMP DEFAULT NOW()
         )
     """)
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS review_comments (
+            id SERIAL PRIMARY KEY,
+            review_id INTEGER REFERENCES reviews(id) ON DELETE CASCADE,
+            username TEXT DEFAULT '名無し',
+            comment TEXT NOT NULL,
+            created_at TIMESTAMP DEFAULT NOW()
+        )
+    """)
+    
+    # マイグレーション（既存デーブルへのカラム追加）
+    try:
+        cur.execute("ALTER TABLE reviews ADD COLUMN likes_count INTEGER DEFAULT 0")
+    except psycopg2.errors.DuplicateColumn:
+        conn.rollback()
+    
+    try:
+        cur.execute("ALTER TABLE reviews ADD COLUMN has_nigiyakashi BOOLEAN DEFAULT FALSE")
+    except psycopg2.errors.DuplicateColumn:
+        conn.rollback()
+        
     conn.commit()
     cur.close()
     conn.close()
 
 # Tables are already created, no need to run on every cold start
-# init_db()
+init_db()
 
 import traceback
 
@@ -168,6 +191,195 @@ def save_uploaded_images(files):
             urls.append(url)
     return urls
 
+# ─── Nigiyakashi ─────────────────────────────────────────
+
+import random
+
+NIGIYAKASHI_NAMES = [
+    "うどん太郎", "さぬきっ子", "麺通ダイスケ", "takuya_udon", "KagawaLover",
+    "あゆみ", "ケンジ", "うどん巡礼者", "shoko_11", "マサヒロ",
+    "UDON_MASTER", "yuki_udon", "香川の民", "麺活おじさん", "はるか",
+    "Daiki99", "うどんダッシュ", "Risa_h", "コシ命", "たかし",
+    "うどん大好きマン", "麺喰い", "satoshi_kagawa", "udon_explorer", "めぐみ",
+    "Hiro", "うどんばか一代ファン", "Kouji", "NoodleLover", "あきら",
+    "さくら", "うどん女子", "Toru", "udon_journey", "麺テロリスト",
+    "Yuta", "うどん侍", "Kana", "うどん探偵", "Shohei",
+    "麺タロウ", "さぬきうーどん", "カマタマスター", "ぶっかけLOVE", "出汁の鬼",
+    "Yasuhiro", "miki_udon", "うどん部部長", "香川トラベラー", "メンクイ",
+    "NoodleKing", "サクサク天ぷら", "かけうどん派", "ざる奉行", "shoyu_udon",
+    "いりこダシ命", "naoto_88", "udon_zuki", "Keiko", "うどんの妖精",
+    "つるつるシコシコ", "釜揚げラバー", "udon_mania", "Tetsuya", "udon_freak",
+    "うどんバカ", "麺の達人", "香川うどん旅", "ayako", "udon_walker",
+    "メンマ", "うどん仙人", "Tomoko", "udon_life", "さぬきの風",
+    "麺食い女子", "Kenta", "うどんボーイ", "NoodleQueen", "麺道",
+    "udon_hunter", "Kenjiro", "yoshiko", "udon_girl", "どんぶり",
+    "ネギ多め", "しょうがマシマシ", "天かすたっぷり", "Ken", "udon_boy",
+    "NoodleLover99", "さぬきうどんファン", "うどんの国から", "麺類皆兄弟", "udon_fanatic",
+    "Takashi", "udon_addict", "麺のとりこ", "さぬきの星", "Yuka",
+    "udon_lover123", "メンクイ党", "うどん党", "Miki", "udon_crazy",
+    "麺の求道者", "さぬきの誇り", "Satoshi", "udon_master99", "メンクイ女子",
+    "うどん女子部", "Ryota", "udon_king", "麺の皇帝", "さぬきの伝説",
+    "Hiroki", "udon_god", "メンクイ男子", "うどん男子部", "Daichi",
+    "shota_udon", "うどんエクスプローラー", "讃岐の求道者", "麺々", "うどん大統領",
+    "ツルツルマスター", "kamata_mania", "hiroyuki"
+]
+
+NIGIYAKASHI_COMMENTS = [
+    "おおっ、美味しそう！🤤", "参考になります！",
+    "今度行ってみます🏃‍♂️", "この麺のツヤ、最高ですね✨",
+    "出汁の香りが伝わってきそうです", "行ってみたい！",
+    "気になってたお店です！", "うどんテロだ…🤤",
+    "飯テロですね！", "香川行きたい！",
+    "素晴らしいレビューですね👏", "写真がキレイ！📸",
+    "天ぷらサクサクしてそう🍤", "コシが強そう！",
+    "安い！コスパいいですね💰", "お店の雰囲気も良さそう🏠",
+    "私もここ好きです！", "これ絶対おいしいやつ",
+    "なるほど、メモメモ📝", "ぶっかけ最高ですよね！",
+    "エッジが立ってますね！美しいです。", "いりこ出汁のいい香りがしてきそう。",
+    "薬味のネギと生姜がたまらないですね。", "ここの釜玉は絶品ですよね！",
+    "揚げたてのちくわ天と一緒に食べたいです。", "めちゃくちゃコシがありそう！",
+    "ここの冷やかけ、夏にぴったりですよね。", "お肉たっぷりで美味しそう！",
+    "麺の太さがちょうど良さそうですね。", "出汁まで飲み干したくなるビジュアルです。",
+    "香川に行ったら絶対ここ行きます！", "レビュー見てたらお腹空いてきました…",
+    "ここのしょうゆうどん、シンプルだけど奥が深いですよね。", "麺と出汁のバランスが最高そう。",
+    "次回のうどん巡りの候補に入れます！", "地元民でもよく行く名店ですね。",
+    "朝うどんにもぴったりな優しい味ですよね。", "かき揚げが大きくて大満足間違いなし！",
+    "いつも行列できてるけど並ぶ価値ありますよね。", "美しい麺線…職人技を感じます。",
+    "黄金色のスープがたまりません🤤", "こんなに美味しそうなうどん、初めて見ました！",
+    "やっぱり香川のうどんはレベルが違う…", "ネギのトッピングが最高に合いますね",
+    "コシの強さが写真からでも伝わってきます！", "ちくわ天は必須ですよね",
+    "釜玉に醤油をタラーっと…想像しただけでお腹が減ります", "出汁の透明感がすごいです✨",
+    "一杯のクオリティが高すぎる", "これでこの値段は安すぎます！",
+    "いつか絶対に食べに行きたいお店の一つです", "ツルツルの喉越しを楽しめそうですね",
+    "香川うどん巡りの参考になりました！", "麺の角がしっかり立っていて素晴らしいです",
+    "丼もいい味出してますね", "天ぷらの揚げ具合が完璧です🍤",
+    "朝からこんなうどんが食べたいです", "うどんの魅力を再確認しました",
+    "だし醤油だけで無限に食べられそうです", "うどんのテリがすごい！",
+    "シンプルイズベストですね", "麺の弾力が楽しそう",
+    "これはリピート確定ですね！", "この時間に見るんじゃなかった…飯テロすぎます😭",
+    "うどん県バンザイ🙌", "いりこの風味がガツンときそうですね",
+    "美味しさがダイレクトに伝わるレビューです", "麺の太さと出汁の絡みが絶妙そうです",
+    "薬味の使い方が上手いですね！", "見事なうどんです👏",
+    "香川のうどんは世界一だと思います", "このお店、前に行ったことあります！本当に美味しかったです",
+    "うどん巡りのモチベーションが上がりました", "今度の休みに絶対行きます！🏃‍♂️",
+    "美しい一枚ですね📸", "麺のコシと出汁の旨味が想像できます",
+    "うどん好きにはたまらない写真です", "これでワンコイン以下は信じられない…",
+    "このお店、気になってたんです！詳しく知れて嬉しいです", "さぬきうどんの王道ですね",
+    "やっぱり釜揚げが一番好きです", "冷やかけの季節ですね〜",
+    "温かい出汁が体にしみわたりそう", "肉うどんの肉がたっぷりですね！",
+    "カレーうどんも美味しそう🤤", "出汁の香りが画面から漂ってきそうです",
+    "このツヤツヤ感、たまりません！", "絶妙な茹で加減ですね",
+    "薬味のバランスが最高", "ちくわ天と半熟卵天、最強のコンビですね",
+    "出汁まで完飲したいレベル", "うどんの白と出汁の黄金色のコントラストが美しい…",
+    "香川の誇りですね", "このお店の出汁は本当に美味しいですよね",
+    "麺の力強さが伝わってきます", "シンプルなのに奥深い、うどんの真髄ですね",
+    "うどん巡りのルートに追加決定です📝", "こんなうどんが毎日食べられたらいいのに",
+    "うどん愛が伝わるレビューですね！", "美味しそうなうどんを見ると幸せな気分になります",
+    "このお店、私の隠れ家的なお店だったのに〜笑", "行列覚悟で行ってみます！",
+    "うどんの奥深さを感じさせられます", "麺の太さが均一で美しいですね",
+    "出汁の味がしっかり染みていそうです", "天ぷらとの相性抜群ですね",
+    "このうどんは間違いない！", "うどんのコシと喉越し、両方楽しめそう",
+    "出汁の旨味がギュッと詰まっていそうです", "これはまさに芸術品…！",
+    "うどん巡りの醍醐味ですね", "このお店のうどん、本当に美味しいですよ！おすすめです",
+    "うどんに対する情熱を感じます🔥", "こんな美味しいうどん、食べたことないです",
+    "うどん好きの私が保証します、これは美味しいやつです", "出汁の香りに誘われてコメントしちゃいました",
+    "うどんの魅力を余すことなく伝えてくれるレビューですね", "このお店、今度絶対行ってみよう！",
+    "うどんのツヤとコシ、写真だけでも分かります", "出汁のこだわりが感じられますね",
+    "天ぷらのサクサク感が伝わってきます", "うどんと出汁の魔法のハーモニーですね",
+    "このお店のうどん、毎日でも食べられます！", "うどんの白さが眩しいです✨",
+    "出汁のコクと旨味が想像できます", "天ぷらの盛り合わせも豪華ですね",
+    "うどんの力強いコシ、たまりません", "出汁の香りが鼻腔をくすぐるようです",
+    "うどんに対する愛が溢れるレビューですね！", "美味しそうなうどんを見ると元気が出ます",
+    "このお店のうどん、本当に絶品ですよね", "うどん巡り、やめられません！",
+    "出汁の味が深く、心まで温まりそうです", "天ぷらの衣がサクサクで美味しそう",
+    "このうどんを食べるためだけに香川に行きたいです", "うどんのコシ、喉越し、出汁の旨味…すべてが完璧ですね",
+    "また絶対に行きます！", "うどんのコシ、最高です",
+    "出汁の香り、食欲をそそります", "天ぷら、美味しそうです！",
+    "このうどん、絶品ですね", "うどん、最高です",
+    "出汁、美味しいそうです", "天ぷら、サクサクですね",
+    "このお店、今度行ってみます", "うどんのコシ、すばらしい",
+    "ぶっかけうどんに大根おろし、さっぱりしていて最高ですね！", "かけうどんの出汁が透き通っていて綺麗…",
+    "肉ぶっかけの肉のボリュームがすごいです🤤", "しょうゆうどんで麺の味をダイレクトに味わいたい！",
+    "釜揚げうどんのふわっとした食感が伝わってきます。", "ざるうどんで一気にすすりたいです！",
+    "カレーうどんのカレーが濃厚そうでたまりません。", "温玉ぶっかけ、卵を崩す瞬間が最高ですよね✨",
+    "ひやあつの絶妙な温度感が好きです！", "しっぽくうどんの具沢山なところが魅力的ですね。",
+    "明太釜玉、間違いなく美味しい組み合わせ！", "肉釜玉、これは反則級の美味しさですね🤤",
+    "とり天が大きくてジューシーそう！", "半熟卵天、黄身がトロッとしているのが想像できます。",
+    "ちくわ天はやっぱり丸ごと一本が嬉しいですね！", "げそ天のボリューム感、満足度高そうです。",
+    "かしわ天がサクサクで美味しそう！", "えび天の衣が綺麗に花開いてますね🍤",
+    "おにぎりといなり寿司も一緒に頼むのは基本ですよね！", "おでんがあるうどん屋さん、最高です🍢",
+    "牛すじおでん、出汁がしみてて美味しそう…", "無料のネギと天かすをたっぷり乗せて食べたいです！",
+    "生姜を効かせて食べると本当に美味しいですよね。", "すだちをギュッと絞ってさっぱりといただきたい🍋",
+    "ごまをたっぷりすって香りを楽しみたいです。", "こだわりの丼ぶりも素敵ですね！",
+    "店主のうどんに対する愛情を感じます。", "この値段でこのクオリティ、香川ならではですね！",
+    "香川のうどん文化、本当に羨ましいです。", "うどんタクシーで行ってみたいお店です🚖",
+    "製麺所の横で食べるうどん、格別ですよね！", "セルフの仕組みも香川のうどん屋さんの楽しみの一つですよね。",
+    "茹でたての麺に当たる幸運、羨ましいです✨", "うどんツアーの1軒目に行きたいお店です！",
+    "お土産うどんも買って帰りたくなりますね。", "大将の元気な声が聞こえてきそうです！",
+    "このツルツル感、箸で持つと滑り落ちそうですね。", "喉越しが良すぎて飲み物みたいですね！😋",
+    "噛むほどに出る小麦の香りが最高ですよね。", "剛麺好きにはたまらないビジュアルです。",
+    "このモチモチ感、タピオカ並みですね！", "出汁のイリコの強さが写真からでも分かります🐟",
+    "カツオの風味がふわっと香りそうですね。", "昆布の旨味が隠し味になってそうですね！",
+    "少し甘めの出汁が好きなので、まさにどストライクです。", "醤油のキレが良くて美味しそう！",
+    "これぞ讃岐！という感じのうどんですね。", "毎日食べても飽きない味ですよね。",
+    "こんなうどん屋さんが近所に欲しい…😭", "地元の人が通う穴場のお店ですね🤫",
+    "これは行列に並んでも食べる価値があります！", "早起きして朝うどんしに行きたいです☀️",
+    "昼ごはんに行ったら午後も頑張れそうです💪", "飲んだ後のシメにも最高ですよね！🍲",
+    "このうどんと一緒にビールを飲みたい🍺", "見てるだけで口の中がうどんになります🤤",
+    "今すぐ香川に飛んで行きたいです✈️", "このレビューを見て、うどん巡りの計画を立て始めました！",
+    "本当に美味しそう…お腹が鳴りました💥", "うどん愛好家として、この写真は見逃せません👀",
+    "麺の輝きが違いますね✨", "出汁のうまみが口に広がる錯覚を起こしました",
+    "あー、これ絶対うまいやつだ", "行列ができる前にいかなきゃ！",
+    "名店の予感がプンプンします", "さすがうどん県！",
+    "讃岐うどんの真骨頂ですね", "麺も出汁もパーフェクト💯"
+]
+
+def process_nigiyakashi():
+    """投稿から10分経過したレビューに対して、ランダムないいねとコメントを付与する"""
+    conn = get_db()
+    cur = conn.cursor()
+    try:
+        # 10分前より古い＆未処理のレビューを取得
+        cur.execute("""
+            SELECT id FROM reviews 
+            WHERE created_at < NOW() - INTERVAL '10 minutes' 
+            AND has_nigiyakashi = FALSE
+        """)
+        target_reviews = cur.fetchall()
+        
+        for row in target_reviews:
+            review_id = row[0]
+            # 0〜100のランダムないいね
+            likes = random.randint(0, 100)
+            
+            # 1〜3個のランダムなコメントを生成
+            num_comments = random.randint(1, 3)
+            comments_to_add = random.sample(NIGIYAKASHI_COMMENTS, num_comments)
+            
+            # いいね数とフラグを更新
+            cur.execute("""
+                UPDATE reviews 
+                SET likes_count = likes_count + %s, has_nigiyakashi = TRUE 
+                WHERE id = %s
+            """, (likes, review_id))
+            
+            # コメントを挿入
+            for comment in comments_to_add:
+                # ユーザー名をより自然なものからランダム選択
+                user = random.choice(NIGIYAKASHI_NAMES)
+                cur.execute("""
+                    INSERT INTO review_comments (review_id, username, comment)
+                    VALUES (%s, %s, %s)
+                """, (review_id, user, comment))
+                
+        conn.commit()
+    except Exception as e:
+        print(f"Error in process_nigiyakashi: {e}")
+        conn.rollback()
+    finally:
+        cur.close()
+        conn.close()
+
 # ─── API: Shops ──────────────────────────────────────────
 @app.route('/api/shops', methods=['GET'])
 def get_shops():
@@ -226,6 +438,7 @@ def add_shop():
 
 @app.route('/api/shops/<int:shop_id>', methods=['GET'])
 def get_shop_detail(shop_id):
+    process_nigiyakashi()
     conn = get_db()
     cur = conn.cursor()
     cur.execute('SELECT * FROM shops WHERE id = %s', (shop_id,))
@@ -259,6 +472,10 @@ def get_shop_detail(shop_id):
     reviews = rows_to_list(cur)
     for r in reviews:
         parse_image_urls(r)
+        
+        # コメント数を取得して付与
+        cur.execute('SELECT COUNT(*) FROM review_comments WHERE review_id = %s', (r['id'],))
+        r['comments_count'] = cur.fetchone()[0]
 
     cur.execute("""
         SELECT udon_type, COUNT(*) as count
@@ -311,10 +528,12 @@ def delete_shop(shop_id):
 # ─── API: Reviews ────────────────────────────────────────
 @app.route('/api/reviews', methods=['GET'])
 def get_reviews():
+    process_nigiyakashi()
     conn = get_db()
     cur = conn.cursor()
     cur.execute("""
-        SELECT r.*, s.name as shop_name, s.area as shop_area
+        SELECT r.*, s.name as shop_name, s.area as shop_area,
+               (SELECT COUNT(*) FROM review_comments WHERE review_id = r.id) as comments_count
         FROM reviews r JOIN shops s ON r.shop_id = s.id
         ORDER BY r.created_at DESC LIMIT 100
     """)
@@ -393,6 +612,65 @@ def delete_review(review_id):
     conn.close()
     return jsonify({'success': True})
 
+@app.route('/api/reviews/<int:review_id>/like', methods=['POST'])
+def like_review(review_id):
+    conn = get_db()
+    cur = conn.cursor()
+    try:
+        cur.execute('UPDATE reviews SET likes_count = likes_count + 1 WHERE id = %s RETURNING likes_count', (review_id,))
+        new_count = cur.fetchone()
+        if not new_count:
+            return jsonify({'error': 'レビューが見つかりません'}), 404
+        conn.commit()
+        return jsonify({'likes_count': new_count[0]})
+    except Exception as e:
+        conn.rollback()
+        return jsonify({'error': str(e)}), 500
+    finally:
+        cur.close()
+        conn.close()
+
+@app.route('/api/reviews/<int:review_id>/comments', methods=['GET'])
+def get_review_comments(review_id):
+    conn = get_db()
+    cur = conn.cursor()
+    cur.execute('SELECT * FROM review_comments WHERE review_id = %s ORDER BY created_at ASC', (review_id,))
+    comments = rows_to_list(cur)
+    cur.close()
+    conn.close()
+    return jsonify(comments)
+
+@app.route('/api/reviews/<int:review_id>/comments', methods=['POST'])
+def add_review_comment(review_id):
+    data = request.get_json()
+    username = (data.get('username') or '名無し').strip()
+    comment = (data.get('comment') or '').strip()
+    
+    if not comment:
+        return jsonify({'error': 'コメント本文は必須です'}), 400
+        
+    conn = get_db()
+    cur = conn.cursor()
+    try:
+        # レビューが存在するか確認
+        cur.execute('SELECT id FROM reviews WHERE id = %s', (review_id,))
+        if not cur.fetchone():
+            return jsonify({'error': 'レビューが見つかりません'}), 404
+            
+        cur.execute("""
+            INSERT INTO review_comments (review_id, username, comment)
+            VALUES (%s, %s, %s) RETURNING *
+        """, (review_id, username, comment))
+        new_comment = row_to_dict(cur)
+        conn.commit()
+        return jsonify(new_comment)
+    except Exception as e:
+        conn.rollback()
+        return jsonify({'error': str(e)}), 500
+    finally:
+        cur.close()
+        conn.close()
+
 # ─── API: Stats ──────────────────────────────────────────
 @app.route('/api/stats/overview', methods=['GET'])
 def get_overview():
@@ -421,7 +699,8 @@ def get_overview():
             s['avg_total'] = float(s['avg_total'])
 
     cur.execute("""
-        SELECT r.*, s.name as shop_name, s.area as shop_area
+        SELECT r.*, s.name as shop_name, s.area as shop_area,
+               (SELECT COUNT(*) FROM review_comments WHERE review_id = r.id) as comments_count
         FROM reviews r JOIN shops s ON r.shop_id = s.id
         ORDER BY r.created_at DESC LIMIT 5
     """)
@@ -466,7 +745,8 @@ def get_user_stats(username):
     cur = conn.cursor()
 
     cur.execute("""
-        SELECT r.*, s.name as shop_name, s.area as shop_area
+        SELECT r.*, s.name as shop_name, s.area as shop_area,
+               (SELECT COUNT(*) FROM review_comments WHERE review_id = r.id) as comments_count
         FROM reviews r JOIN shops s ON r.shop_id = s.id
         WHERE r.username = %s ORDER BY r.created_at DESC
     """, (username,))
