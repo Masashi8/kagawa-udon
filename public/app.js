@@ -294,6 +294,32 @@ async function showShopDetail(id) {
   } catch (e) { /* */ }
 }
 
+async function deleteShop(id, name) {
+  if (!confirm(`店舗「${name}」を削除しますか？\n\n※この店舗に関連するすべてのレビューと画像も削除されます。この操作は取り消せません。`)) {
+    return;
+  }
+  
+  try {
+    const btn = event?.target;
+    if (btn) btn.disabled = true;
+    
+    await api(`/api/shops/${id}`, { method: 'DELETE' });
+    showToast(`店舗「${name}」を削除しました`);
+    
+    // 削除成功時の画面遷移
+    if ($('#page-shop-detail').classList.contains('active')) {
+      // 詳細画面にいる場合は一覧へ戻る
+      navigateTo('shops');
+    } else {
+      // 一覧画面にいる場合は一覧を再読込
+      loadShops();
+    }
+  } catch (e) {
+    if (btn) btn.disabled = false;
+    //エラー時はAPI側の例外でトーストが出ます
+  }
+}
+
 $('#btn-back-shops').addEventListener('click', () => navigateTo('shops'));
 
 // ─── Radar Chart (Canvas) ──────────────────────────────
