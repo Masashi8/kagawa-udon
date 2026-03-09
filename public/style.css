@@ -429,6 +429,7 @@ input, select, textarea, button { font-family: inherit; }
 }
 .review-score-item {
   font-size: 0.75rem; color: var(--text-muted);
+}
 .review-score-item span {
   font-weight: 700; color: var(--accent); font-size: 0.85rem;
 }
