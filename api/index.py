@@ -5,11 +5,9 @@ import psycopg2
 import psycopg2.extras
 import requests as http_requests
 from datetime import datetime
-from flask import Flask, request, jsonify, send_from_directory, send_file
+from flask import Flask, request, jsonify
 
-app = Flask(__name__, static_folder='public', static_url_path='')
-
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+app = Flask(__name__)
 
 # ─── Config from environment variables ───────────────────
 DATABASE_URL = os.environ.get('DATABASE_URL', '')
@@ -492,19 +490,6 @@ def upload_images():
     urls = save_uploaded_images(images)
     return jsonify({'urls': urls})
 
-# ─── SPA Fallback ────────────────────────────────────────
-@app.route('/')
-def index():
-    return send_file(os.path.join(BASE_DIR, 'public', 'index.html'))
 
-@app.route('/<path:path>')
-def catch_all(path):
-    static_path = os.path.join(BASE_DIR, 'public', path)
-    if os.path.isfile(static_path):
-        return send_from_directory(os.path.join(BASE_DIR, 'public'), path)
-    return send_file(os.path.join(BASE_DIR, 'public', 'index.html'))
+# Vercel serverless uses the 'app' module
 
-if __name__ == '__main__':
-    port = int(os.environ.get('PORT', 3000))
-    print(f'[UDON] Sanuki Udon Review running at http://localhost:{port}')
-    app.run(host='0.0.0.0', port=port, debug=True)
