@@ -55,7 +55,20 @@ def init_db():
     cur.close()
     conn.close()
 
-init_db()
+# Tables are already created, no need to run on every cold start
+# init_db()
+
+import traceback
+
+@app.errorhandler(Exception)
+def handle_exception(e):
+    # This prevents Vercel from returning an HTML "Internal Server Error" page
+    # and instead gives us the exact Python error in JSON so the frontend Toast can read it.
+    print(f"Server Error: {str(e)}\n{traceback.format_exc()}")
+    return jsonify({
+        'error': f"サーバーエラーが発生しました: {str(e)}",
+        'details': traceback.format_exc()
+    }), 500
 
 def row_to_dict(cur):
     """Fetch one row as dict"""
