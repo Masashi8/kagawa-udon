@@ -48,15 +48,38 @@ def init_db():
             udon_type TEXT NOT NULL DEFAULT '',
             comment TEXT DEFAULT '',
             image_urls TEXT DEFAULT '[]',
+            likes_count INTEGER DEFAULT 0,
+            has_nigiyakashi BOOLEAN DEFAULT FALSE,
             created_at TIMESTAMP DEFAULT NOW()
         )
     """)
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS review_comments (
+            id SERIAL PRIMARY KEY,
+            review_id INTEGER REFERENCES reviews(id) ON DELETE CASCADE,
+            username TEXT DEFAULT '名無し',
+            comment TEXT NOT NULL,
+            created_at TIMESTAMP DEFAULT NOW()
+        )
+    """)
+    
+    # マイグレーション（既存デーブルへのカラム追加）
+    try:
+        cur.execute("ALTER TABLE reviews ADD COLUMN likes_count INTEGER DEFAULT 0")
+    except psycopg2.errors.DuplicateColumn:
+        conn.rollback()
+    
+    try:
+        cur.execute("ALTER TABLE reviews ADD COLUMN has_nigiyakashi BOOLEAN DEFAULT FALSE")
+    except psycopg2.errors.DuplicateColumn:
+        conn.rollback()
+        
     conn.commit()
     cur.close()
     conn.close()
 
 # Tables are already created, no need to run on every cold start
-# init_db()
+init_db()
 
 import traceback
 
@@ -168,6 +191,64 @@ def save_uploaded_images(files):
             urls.append(url)
     return urls
 
+# ─── Nigiyakashi ─────────────────────────────────────────
+
+import random
+
+NIGIYAKASHI_COMMENTS = [
+    "おおっ、美味しそう！🤤", "参考になります！", "今度行ってみます🏃‍♂️", "この麺のツヤ、最高ですね✨", 
+    "出汁の香りが伝わってきそうです", "行ってみたい！", "気になってたお店です！", "うどんテロだ…🤤",
+    "飯テロですね！", "香川行きたい！", "素晴らしいレビューですね👏", "写真がキレイ！📸", 
+    "天ぷらサクサクしてそう🍤", "コシが強そう！", "安い！コスパいいですね💰", "お店の雰囲気も良さそう🏠",
+    "私もここ好きです！", "これ絶対おいしいやつ", "なるほど、メモメモ📝", "ぶっかけ最高ですよね！"
+]
+
+def process_nigiyakashi():
+    """投稿から10分経過したレビューに対して、ランダムないいねとコメントを付与する"""
+    conn = get_db()
+    cur = conn.cursor()
+    try:
+        # 10分前より古い＆未処理のレビューを取得
+        cur.execute("""
+            SELECT id FROM reviews 
+            WHERE created_at < NOW() - INTERVAL '10 minutes' 
+            AND has_nigiyakashi = FALSE
+        """)
+        target_reviews = cur.fetchall()
+        
+        for row in target_reviews:
+            review_id = row[0]
+            # 0〜100のランダムないいね
+            likes = random.randint(0, 100)
+            
+            # 1〜3個のランダムなコメントを生成
+            num_comments = random.randint(1, 3)
+            comments_to_add = random.sample(NIGIYAKASHI_COMMENTS, num_comments)
+            
+            # いいね数とフラグを更新
+            cur.execute("""
+                UPDATE reviews 
+                SET likes_count = likes_count + %s, has_nigiyakashi = TRUE 
+                WHERE id = %s
+            """, (likes, review_id))
+            
+            # コメントを挿入
+            for comment in comments_to_add:
+                # ユーザー名もランダムな名無しにする
+                user = f"うどん好き{random.randint(1, 9999):04d}"
+                cur.execute("""
+                    INSERT INTO review_comments (review_id, username, comment)
+                    VALUES (%s, %s, %s)
+                """, (review_id, user, comment))
+                
+        conn.commit()
+    except Exception as e:
+        print(f"Error in process_nigiyakashi: {e}")
+        conn.rollback()
+    finally:
+        cur.close()
+        conn.close()
+
 # ─── API: Shops ──────────────────────────────────────────
 @app.route('/api/shops', methods=['GET'])
 def get_shops():
@@ -226,6 +307,7 @@ def add_shop():
 
 @app.route('/api/shops/<int:shop_id>', methods=['GET'])
 def get_shop_detail(shop_id):
+    process_nigiyakashi()
     conn = get_db()
     cur = conn.cursor()
     cur.execute('SELECT * FROM shops WHERE id = %s', (shop_id,))
@@ -259,6 +341,10 @@ def get_shop_detail(shop_id):
     reviews = rows_to_list(cur)
     for r in reviews:
         parse_image_urls(r)
+        
+        # コメント数を取得して付与
+        cur.execute('SELECT COUNT(*) FROM review_comments WHERE review_id = %s', (r['id'],))
+        r['comments_count'] = cur.fetchone()[0]
 
     cur.execute("""
         SELECT udon_type, COUNT(*) as count
@@ -311,10 +397,12 @@ def delete_shop(shop_id):
 # ─── API: Reviews ────────────────────────────────────────
 @app.route('/api/reviews', methods=['GET'])
 def get_reviews():
+    process_nigiyakashi()
     conn = get_db()
     cur = conn.cursor()
     cur.execute("""
-        SELECT r.*, s.name as shop_name, s.area as shop_area
+        SELECT r.*, s.name as shop_name, s.area as shop_area,
+               (SELECT COUNT(*) FROM review_comments WHERE review_id = r.id) as comments_count
         FROM reviews r JOIN shops s ON r.shop_id = s.id
         ORDER BY r.created_at DESC LIMIT 100
     """)
@@ -393,6 +481,65 @@ def delete_review(review_id):
     conn.close()
     return jsonify({'success': True})
 
+@app.route('/api/reviews/<int:review_id>/like', methods=['POST'])
+def like_review(review_id):
+    conn = get_db()
+    cur = conn.cursor()
+    try:
+        cur.execute('UPDATE reviews SET likes_count = likes_count + 1 WHERE id = %s RETURNING likes_count', (review_id,))
+        new_count = cur.fetchone()
+        if not new_count:
+            return jsonify({'error': 'レビューが見つかりません'}), 404
+        conn.commit()
+        return jsonify({'likes_count': new_count[0]})
+    except Exception as e:
+        conn.rollback()
+        return jsonify({'error': str(e)}), 500
+    finally:
+        cur.close()
+        conn.close()
+
+@app.route('/api/reviews/<int:review_id>/comments', methods=['GET'])
+def get_review_comments(review_id):
+    conn = get_db()
+    cur = conn.cursor()
+    cur.execute('SELECT * FROM review_comments WHERE review_id = %s ORDER BY created_at ASC', (review_id,))
+    comments = rows_to_list(cur)
+    cur.close()
+    conn.close()
+    return jsonify(comments)
+
+@app.route('/api/reviews/<int:review_id>/comments', methods=['POST'])
+def add_review_comment(review_id):
+    data = request.get_json()
+    username = (data.get('username') or '名無し').strip()
+    comment = (data.get('comment') or '').strip()
+    
+    if not comment:
+        return jsonify({'error': 'コメント本文は必須です'}), 400
+        
+    conn = get_db()
+    cur = conn.cursor()
+    try:
+        # レビューが存在するか確認
+        cur.execute('SELECT id FROM reviews WHERE id = %s', (review_id,))
+        if not cur.fetchone():
+            return jsonify({'error': 'レビューが見つかりません'}), 404
+            
+        cur.execute("""
+            INSERT INTO review_comments (review_id, username, comment)
+            VALUES (%s, %s, %s) RETURNING *
+        """, (review_id, username, comment))
+        new_comment = row_to_dict(cur)
+        conn.commit()
+        return jsonify(new_comment)
+    except Exception as e:
+        conn.rollback()
+        return jsonify({'error': str(e)}), 500
+    finally:
+        cur.close()
+        conn.close()
+
 # ─── API: Stats ──────────────────────────────────────────
 @app.route('/api/stats/overview', methods=['GET'])
 def get_overview():
@@ -421,7 +568,8 @@ def get_overview():
             s['avg_total'] = float(s['avg_total'])
 
     cur.execute("""
-        SELECT r.*, s.name as shop_name, s.area as shop_area
+        SELECT r.*, s.name as shop_name, s.area as shop_area,
+               (SELECT COUNT(*) FROM review_comments WHERE review_id = r.id) as comments_count
         FROM reviews r JOIN shops s ON r.shop_id = s.id
         ORDER BY r.created_at DESC LIMIT 5
     """)
@@ -466,7 +614,8 @@ def get_user_stats(username):
     cur = conn.cursor()
 
     cur.execute("""
-        SELECT r.*, s.name as shop_name, s.area as shop_area
+        SELECT r.*, s.name as shop_name, s.area as shop_area,
+               (SELECT COUNT(*) FROM review_comments WHERE review_id = r.id) as comments_count
         FROM reviews r JOIN shops s ON r.shop_id = s.id
         WHERE r.username = %s ORDER BY r.created_at DESC
     """, (username,))
