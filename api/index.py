@@ -486,7 +486,9 @@ def get_shop_detail(shop_id):
 
     cur.close()
     conn.close()
-    return jsonify({'shop': shop, 'stats': stats, 'reviews': reviews, 'udonTypes': udon_types})
+    response = jsonify({'shop': shop, 'stats': stats, 'reviews': reviews, 'udonTypes': udon_types})
+    response.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate'
+    return response
 
 @app.route('/api/shops/<int:shop_id>', methods=['DELETE'])
 def delete_shop(shop_id):
@@ -542,7 +544,9 @@ def get_reviews():
     conn.close()
     for r in reviews:
         parse_image_urls(r)
-    return jsonify(reviews)
+    response = jsonify(reviews)
+    response.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate'
+    return response
 
 @app.route('/api/reviews', methods=['POST'])
 def add_review():
@@ -638,7 +642,9 @@ def get_review_comments(review_id):
     comments = rows_to_list(cur)
     cur.close()
     conn.close()
-    return jsonify(comments)
+    response = jsonify(comments)
+    response.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate'
+    return response
 
 @app.route('/api/reviews/<int:review_id>/comments', methods=['POST'])
 def add_review_comment(review_id):
