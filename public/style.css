@@ -1,26 +1,26 @@
 /* ─── Reset & Variables ─────────────────────────────────── */
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 :root {
-  --bg-primary: #0f0f14;
-  --bg-secondary: #1a1a24;
-  --bg-card: rgba(30, 30, 45, 0.7);
-  --bg-glass: rgba(40, 40, 60, 0.4);
-  --border-glass: rgba(255, 200, 100, 0.12);
-  --text-primary: #f0ece4;
-  --text-secondary: #a09b8e;
-  --text-muted: #6b6760;
-  --accent: #e8a838;
-  --accent-light: #f0c060;
-  --accent-dark: #c08020;
-  --accent-glow: rgba(232, 168, 56, 0.25);
-  --green: #4ade80;
-  --red: #f87171;
-  --blue: #60a5fa;
-  --purple: #a78bfa;
+  --bg-primary: #f8f9fa;
+  --bg-secondary: #ffffff;
+  --bg-card: rgba(255, 255, 255, 0.85);
+  --bg-glass: rgba(255, 255, 255, 0.6);
+  --border-glass: rgba(0, 0, 0, 0.08);
+  --text-primary: #1e1e24;
+  --text-secondary: #4a4a55;
+  --text-muted: #8a8a95;
+  --accent: #d97706; /* Orange/amber accent */
+  --accent-light: #f59e0b;
+  --accent-dark: #b45309;
+  --accent-glow: rgba(217, 119, 6, 0.15);
+  --green: #10b981;
+  --red: #ef4444;
+  --blue: #3b82f6;
+  --purple: #8b5cf6;
   --radius: 16px;
   --radius-sm: 10px;
   --radius-xs: 6px;
-  --shadow: 0 8px 32px rgba(0,0,0,0.4);
+  --shadow: 0 8px 32px rgba(0,0,0,0.06);
   --transition: 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   --font: 'Noto Sans JP', -apple-system, sans-serif;
   --nav-height: 64px;
@@ -40,7 +40,7 @@ input, select, textarea, button { font-family: inherit; }
 /* ─── Navigation ───────────────────────────────────────── */
 #main-nav {
   position: fixed; top: 0; left: 0; right: 0; z-index: 100;
-  background: rgba(15, 15, 20, 0.85);
+  background: rgba(255, 255, 255, 0.85);
   backdrop-filter: blur(20px);
   border-bottom: 1px solid var(--border-glass);
   height: var(--nav-height);
@@ -86,7 +86,7 @@ input, select, textarea, button { font-family: inherit; }
 .mobile-menu {
   display: none; position: fixed; top: var(--nav-height);
   left: 0; right: 0; z-index: 99;
-  background: rgba(15, 15, 20, 0.95);
+  background: rgba(255, 255, 255, 0.95);
   backdrop-filter: blur(20px);
   padding: 1rem; border-bottom: 1px solid var(--border-glass);
   flex-direction: column; gap: 0.5rem;
@@ -113,7 +113,7 @@ input, select, textarea, button { font-family: inherit; }
 
 /* ─── Hero ─────────────────────────────────────────────── */
 .hero {
-  background: linear-gradient(135deg, #1a1208 0%, #2a1a08 30%, #1a1510 60%, var(--bg-primary) 100%);
+  background: linear-gradient(135deg, #fffaf0 0%, #fff 40%, #fdf5e6 100%);
   padding: 4rem 1.5rem 3rem;
   text-align: center; position: relative; overflow: hidden;
 }
@@ -156,8 +156,9 @@ input, select, textarea, button { font-family: inherit; }
   transition: var(--transition);
 }
 .section-card:hover {
-  border-color: rgba(255, 200, 100, 0.25);
+  border-color: rgba(217, 119, 6, 0.25);
   transform: translateY(-2px);
+  box-shadow: 0 12px 40px rgba(0,0,0,0.08);
 }
 .section-card h2 {
   font-size: 1.1rem; font-weight: 700; margin-bottom: 1rem;
@@ -241,7 +242,7 @@ input, select, textarea, button { font-family: inherit; }
   background: linear-gradient(90deg, var(--accent-dark), var(--accent), var(--accent-light));
   opacity: 0; transition: var(--transition);
 }
-.shop-card:hover { transform: translateY(-4px); border-color: var(--accent); box-shadow: 0 12px 40px rgba(0,0,0,0.5); }
+.shop-card:hover { transform: translateY(-4px); border-color: var(--accent); box-shadow: 0 12px 40px rgba(0,0,0,0.08); }
 .shop-card:hover::before { opacity: 1; }
 .shop-card-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 0.75rem; }
 .shop-card-name { font-size: 1.1rem; font-weight: 700; }
@@ -402,7 +403,7 @@ input, select, textarea, button { font-family: inherit; }
   border-radius: var(--radius-sm); padding: 1.25rem;
   margin-bottom: 1rem; transition: var(--transition);
 }
-.review-card:hover { border-color: rgba(255, 200, 100, 0.2); }
+.review-card:hover { border-color: rgba(217, 119, 6, 0.2); box-shadow: 0 8px 24px rgba(0,0,0,0.04); }
 .review-card-header {
   display: flex; justify-content: space-between; align-items: flex-start;
   margin-bottom: 0.75rem; flex-wrap: wrap; gap: 0.5rem;
@@ -452,6 +453,14 @@ input, select, textarea, button { font-family: inherit; }
 }
 .btn-delete-review:hover { opacity: 1; background: rgba(248,113,113,0.15); }
 .review-card:hover .btn-delete-review { opacity: 0.6; }
+.btn-delete-shop {
+  background: none; border: none; cursor: pointer;
+  font-size: 1rem; padding: 0.4rem; border-radius: 6px;
+  opacity: 0.3; transition: var(--transition);
+  position: absolute; top: 1rem; right: 1rem;
+}
+.btn-delete-shop:hover { opacity: 1; background: rgba(248,113,113,0.15); }
+.shop-card:hover .btn-delete-shop { opacity: 0.6; }
 
 /* ─── Rankings ─────────────────────────────────────────── */
 .ranking-list { display: flex; flex-direction: column; gap: 0.6rem; }

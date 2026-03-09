@@ -5,9 +5,10 @@ import psycopg2
 import psycopg2.extras
 import requests as http_requests
 from datetime import datetime
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify, send_from_directory, send_file
 
-app = Flask(__name__)
+app = Flask(__name__, static_folder='../public', static_url_path='')
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 # ─── Config from environment variables ───────────────────
 DATABASE_URL = os.environ.get('DATABASE_URL', '')
@@ -257,6 +258,43 @@ def get_shop_detail(shop_id):
     conn.close()
     return jsonify({'shop': shop, 'stats': stats, 'reviews': reviews, 'udonTypes': udon_types})
 
+@app.route('/api/shops/<int:shop_id>', methods=['DELETE'])
+def delete_shop(shop_id):
+    conn = get_db()
+    cur = conn.cursor()
+    
+    # 1. 削除対象の店舗が存在するか確認
+    cur.execute('SELECT * FROM shops WHERE id = %s', (shop_id,))
+    shop = row_to_dict(cur)
+    if not shop:
+        cur.close()
+        conn.close()
+        return jsonify({'error': '\u5e97\u8217\u304c\u898b\u3064\u304b\u308a\u307e\u305b\u3093'}), 404
+
+    # 2. 対象店舗に紐づくすべてのレビューを取得
+    cur.execute('SELECT image_urls FROM reviews WHERE shop_id = %s', (shop_id,))
+    reviews = rows_to_list(cur)
+    
+    # 3. 各レビューの画像をSupabase Storageから削除
+    for r in reviews:
+        try:
+            image_urls = json.loads(r.get('image_urls', '[]'))
+            for url in image_urls:
+                delete_from_supabase(url)
+        except:
+            pass
+
+    # 4. レビューレコードの削除
+    cur.execute('DELETE FROM reviews WHERE shop_id = %s', (shop_id,))
+    
+    # 5. 店舗レコードの削除
+    cur.execute('DELETE FROM shops WHERE id = %s', (shop_id,))
+    
+    conn.commit()
+    cur.close()
+    conn.close()
+    return jsonify({'success': True})
+
 # ─── API: Reviews ────────────────────────────────────────
 @app.route('/api/reviews', methods=['GET'])
 def get_reviews():
@@ -493,3 +531,19 @@ def upload_images():
 
 # Vercel serverless uses the 'app' module
 
+# ─── SPA Fallback (Only for Local Dev) ───────────────────
+@app.route('/')
+def index_local():
+    return send_file(os.path.join(BASE_DIR, 'public', 'index.html'))
+
+@app.route('/<path:path>')
+def catch_all_local(path):
+    static_path = os.path.join(BASE_DIR, 'public', path)
+    if os.path.isfile(static_path):
+        return send_from_directory(os.path.join(BASE_DIR, 'public'), path)
+    return send_file(os.path.join(BASE_DIR, 'public', 'index.html'))
+
+if __name__ == '__main__':
+    port = int(os.environ.get('PORT', 3000))
+    print(f'[UDON] Sanuki Udon Review local dev server running on port {port}')
+    app.run(host='0.0.0.0', port=port, debug=True)

@@ -181,6 +181,7 @@ function renderShops(shops) {
             <div class="shop-card-name">${escHtml(s.name)}</div>
             ${s.area ? `<span class="shop-card-area">${escHtml(s.area)}</span>` : ''}
           </div>
+          <button class="btn-delete-shop" onclick="event.stopPropagation(); deleteShop(${s.id}, '${escHtml(s.name)}')">🗑️</button>
           <div class="shop-card-score">${s.avg_total || '-'}<small>/5</small></div>
         </div>
         <div class="shop-card-bars">
@@ -242,11 +243,14 @@ async function showShopDetail(id) {
     const radarData = scoreItems.map(si => stats[si.key] || 0);
 
     let html = `
-      <div class="shop-detail-header">
-        <div class="shop-detail-name">${escHtml(shop.name)}</div>
-        <div class="shop-detail-area">📍 ${escHtml(shop.area || '未設定')}</div>
-        <div class="shop-detail-total">${stats.avg_total || '-'}<small> / 5.00</small></div>
-        <div style="font-size:0.85rem; color:var(--text-muted)">${stats.review_count} 件のレビュー</div>
+      <div class="shop-detail-header" style="display:flex; justify-content:space-between; align-items:flex-start;">
+        <div>
+          <div class="shop-detail-name">${escHtml(shop.name)}</div>
+          <div class="shop-detail-area">📍 ${escHtml(shop.area || '未設定')}</div>
+          <div class="shop-detail-total">${stats.avg_total || '-'}<small> / 5.00</small></div>
+          <div style="font-size:0.85rem; color:var(--text-muted)">${stats.review_count} 件のレビュー</div>
+        </div>
+        <button class="btn btn-sm" style="color:var(--red); border-color:var(--red); background:none;" onclick="deleteShop(${shop.id}, '${escHtml(shop.name)}')">🗑️ 店舗を削除</button>
       </div>
 
       <div class="grid-2">
