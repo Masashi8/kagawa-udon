@@ -300,7 +300,7 @@ async function deleteShop(id, name) {
   }
   
   try {
-    const btn = event?.target;
+    const btn = event && event.target;
     if (btn) btn.disabled = true;
     
     await api(`/api/shops/${id}`, { method: 'DELETE' });
